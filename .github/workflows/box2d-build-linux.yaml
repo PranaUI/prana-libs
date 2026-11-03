@@ -25,17 +25,20 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build
+          # Menambahkan dependensi Wayland dan X11 yang dibutuhkan oleh konfigurasi GLFW bawaan Box2D
+          sudo apt-get install -y build-essential cmake ninja-build \
+            libwayland-dev wayland-protocols libxkbcommon-dev xorg-dev
 
       - name: Configure CMake (Linux)
         run: |
+          # Menggunakan flag baru untuk Box2D v3 (SAMPLES dan UNIT_TESTS)
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=install_dir \
             -DBUILD_SHARED_LIBS=OFF \
-            -DBOX2D_BUILD_TESTBED=OFF \
-            -DBOX2D_BUILD_UNIT_TESTS=OFF \
-            -DBOX2D_BUILD_DOCS=OFF
+            -DBOX2D_SAMPLES=OFF \
+            -DBOX2D_UNIT_TESTS=OFF \
+            -DBOX2D_VALIDATION=OFF
 
       - name: Build Box2D
         run: cmake --build build --config Release
