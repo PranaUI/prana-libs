@@ -1,0 +1,61 @@
+name: Build Yoga Android
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Yoga Android (arm64-v8a)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Yoga Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'facebook/yoga'
+          ref: 'main'
+          fetch-depth: 1
+
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build zip
+
+      - name: Configure CMake (Android)
+        run: |
+          cmake -S . -B build_android -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=install_dir_android \
+            -DBUILD_SHARED_LIBS=OFF
+
+      - name: Build Yoga
+        run: cmake --build build_android --config Release
+
+      - name: Install to Directory
+        run: cmake --install build_android
+
+      - name: Package Artifacts (ZIP)
+        run: |
+          cd install_dir_android
+          zip -r ../yoga-android-arm64-prebuilt.zip include lib
+          cd ..
+
+      - name: Add to Continuous Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "latest"
+          name: "Latest Prebuilt Libraries"
+          body: "Automated continuous build of prebuilt libraries (Skia, SDL3, QuickJS, Yoga)."
+          artifacts: "yoga-android-arm64-prebuilt.zip"
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true

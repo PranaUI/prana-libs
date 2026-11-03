@@ -1,0 +1,57 @@
+name: Build Yoga Linux
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Yoga Linux (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Yoga Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'facebook/yoga'
+          ref: 'main'
+          fetch-depth: 1
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+      - name: Configure CMake (Linux)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=install_dir \
+            -DBUILD_SHARED_LIBS=OFF
+
+      - name: Build Yoga
+        run: cmake --build build --config Release
+
+      - name: Install to Directory
+        run: cmake --install build
+
+      - name: Package Artifacts (TAR.GZ)
+        run: |
+          # Mengompres HANYA folder include dan lib
+          tar -czvf yoga-linux-x64-prebuilt.tar.gz -C install_dir include lib
+
+      - name: Add to Continuous Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "latest"
+          name: "Latest Prebuilt Libraries"
+          body: "Automated continuous build of prebuilt libraries (Skia, SDL3, QuickJS, Yoga)."
+          artifacts: "yoga-linux-x64-prebuilt.tar.gz"
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true

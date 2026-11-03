@@ -1,0 +1,59 @@
+name: Build Box2D Linux
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Box2D Linux (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Box2D Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'erincatto/box2d'
+          ref: 'main'
+          fetch-depth: 1
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+      - name: Configure CMake (Linux)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=install_dir \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBOX2D_BUILD_TESTBED=OFF \
+            -DBOX2D_BUILD_UNIT_TESTS=OFF \
+            -DBOX2D_BUILD_DOCS=OFF
+
+      - name: Build Box2D
+        run: cmake --build build --config Release
+
+      - name: Install to Directory
+        run: cmake --install build
+
+      - name: Package Artifacts (TAR.GZ)
+        run: |
+          tar -czvf box2d-linux-x64-prebuilt.tar.gz -C install_dir include lib
+
+      - name: Add to Continuous Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "latest"
+          name: "Latest Prebuilt Libraries"
+          body: "Automated continuous build of prebuilt libraries (Skia, SDL3, QuickJS, Yoga, Box2D)."
+          artifacts: "box2d-linux-x64-prebuilt.tar.gz"
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true
