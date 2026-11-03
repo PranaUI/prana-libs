@@ -1,4 +1,4 @@
-name: Build SDL3 Android
+name: Build Skia Android
 
 on:
   push:
@@ -12,52 +12,81 @@ permissions:
 
 jobs:
   build-android:
-    name: Build SDL3 Android (arm64-v8a)
+    name: Build Android (arm64)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout SDL Repository
+      - name: Checkout Skia Repository
         uses: actions/checkout@v4
         with:
-          repository: 'libsdl-org/SDL'
-          ref: 'main'
+          repository: 'google/skia'
+          ref: 'chrome/m158'
           fetch-depth: 1
+          path: 'skia'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
       - name: Install Prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build zip
+          sudo apt-get install -y build-essential libfontconfig-dev git python3-venv ninja-build zip
 
-      - name: Configure CMake (Android)
+      - name: Sync Skia Dependencies
+        working-directory: skia
+        run: python tools/git-sync-deps
+
+      - name: Fetch GN
+        working-directory: skia
+        run: bin/fetch-gn
+
+      - name: Generate Build Files (GN)
+        working-directory: skia
         run: |
-          # Ditambahkan argumen SDL_SHARED=OFF dan SDL_STATIC=ON
-          cmake -S . -B build_android -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-21 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=install_dir_android \
-            -DSDL_SHARED=OFF \
-            -DSDL_STATIC=ON
+          bin/gn gen out/Android_arm64 --args='
+            ndk="'$ANDROID_NDK_LATEST_HOME'"
+            target_os="android"
+            target_cpu="arm64"
+            is_debug=false
+            is_official_build=true
+            skia_use_system_expat=false
+            skia_use_system_freetype2=false
+            skia_use_system_libjpeg_turbo=false
+            skia_use_system_libpng=false
+            skia_use_system_libwebp=false
+            skia_use_system_zlib=false
+            skia_use_system_harfbuzz=false
+            skia_use_system_icu=false
+          '
 
-      - name: Build SDL3
-        run: cmake --build build_android --config Release
-
-      - name: Install to Directory
-        run: cmake --install build_android
+      - name: Compile Skia (Ninja)
+        working-directory: skia
+        run: ninja -C out/Android_arm64
 
       - name: Package Artifacts (ZIP)
+        working-directory: skia
         run: |
-          cd install_dir_android
-          zip -r ../sdl3-android-arm64-prebuilt.zip include lib
+          mkdir -p release_assets/lib
+          
+          # 1. Salin seluruh folder include ke dalam release_assets
+          cp -r include release_assets/
+          
+          # 2. Salin file library (.a dan .so) ke dalam folder lib
+          find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
+          
+          # 3. Kompres dari dalam folder release_assets agar struktur root-nya langsung include dan lib
+          cd release_assets
+          zip -r ../skia-android-arm64-m158.zip include lib
           cd ..
 
-      - name: Add to Continuous Release
+      - name: Update Continuous Release
         uses: ncipollo/release-action@v1
         with:
           tag: "latest"
           name: "Latest Prebuilt Libraries"
           body: "Automated continuous build of prebuilt libraries (Skia & SDL3)."
-          artifacts: "sdl3-android-arm64-prebuilt.zip"
+          artifacts: "skia/skia-android-arm64-m158.zip"
           allowUpdates: true
           replacesArtifacts: true
           omitBodyDuringUpdate: true
