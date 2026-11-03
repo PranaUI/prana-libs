@@ -1,4 +1,4 @@
-name: Build Skia for Android
+name: Build Skia for Android (chrome/m158)
 
 on:
   push:
@@ -56,12 +56,13 @@ jobs:
             skia_use_system_libpng=false
             skia_use_system_libwebp=false
             skia_use_system_zlib=false
+            skia_use_system_harfbuzz=false
+            skia_use_system_icu=false
           '
 
       - name: Compile Skia (Ninja)
         working-directory: skia
         run: |
-          # Menggunakan Ninja bawaan sistem (apt), bukan bawaan skia/bin
           ninja -C out/Android_arm64
 
       - name: Upload Artifacts
