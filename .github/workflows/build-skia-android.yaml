@@ -1,4 +1,4 @@
-name: Build Skia for Android (chrome/m158)
+name: Build Skia Android
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
-# PENTING: Izin ini wajib ada agar GitHub Actions bisa membuat/mengubah Rilis
 permissions:
   contents: write
 
@@ -15,7 +14,6 @@ jobs:
   build-android:
     name: Build Android (arm64)
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Skia Repository
         uses: actions/checkout@v4
@@ -37,13 +35,11 @@ jobs:
 
       - name: Sync Skia Dependencies
         working-directory: skia
-        run: |
-          python tools/git-sync-deps
+        run: python tools/git-sync-deps
 
       - name: Fetch GN
         working-directory: skia
-        run: |
-          bin/fetch-gn
+        run: bin/fetch-gn
 
       - name: Generate Build Files (GN)
         working-directory: skia
@@ -66,26 +62,22 @@ jobs:
 
       - name: Compile Skia (Ninja)
         working-directory: skia
-        run: |
-          ninja -C out/Android_arm64
+        run: ninja -C out/Android_arm64
 
       - name: Package Artifacts (ZIP)
         working-directory: skia
         run: |
-          # Membuat folder sementara untuk mengumpulkan file
           mkdir -p release_assets
-          # Menyalin file .a dan .so ke folder release_assets
           find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/ \;
-          # Mengompres folder menjadi file ZIP
           zip -r skia-android-arm64-m158.zip release_assets/
 
-      - name: Create or Update Release
+      - name: Update Continuous Release
         uses: ncipollo/release-action@v1
         with:
-          tag: "latest" # Nama tag yang akan selalu ditimpa (update terus)
-          name: "Latest Binary Build"
-          body: "Automated build of Skia, SDL3, Yoga, QuickJS-NG. Asset ini akan otomatis diperbarui setiap ada commit baru."
+          tag: "latest"
+          name: "Latest Skia Build (chrome/m158)"
+          body: "Automated continuous build of Skia for Android (arm64) and Linux (x64)."
           artifacts: "skia/skia-android-arm64-m158.zip"
-          allowUpdates: true # Mengizinkan update rilis yang sudah ada
-          replacesArtifacts: true # Menimpa file ZIP yang lama dengan yang baru
-          makeLatest: true # Menandai rilis ini sebagai rilis terbaru
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true # Agar tidak menimpa deskripsi dari workflow lain
