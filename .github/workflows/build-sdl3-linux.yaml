@@ -34,9 +34,12 @@ jobs:
 
       - name: Configure CMake (Linux)
         run: |
+          # Ditambahkan argumen SDL_SHARED=OFF dan SDL_STATIC=ON
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=install_dir
+            -DCMAKE_INSTALL_PREFIX=install_dir \
+            -DSDL_SHARED=OFF \
+            -DSDL_STATIC=ON
 
       - name: Build SDL3
         run: cmake --build build --config Release
@@ -46,7 +49,6 @@ jobs:
 
       - name: Package Artifacts (TAR.GZ)
         run: |
-          # Mengompres HANYA folder include dan lib dari dalam install_dir
           tar -czvf sdl3-linux-x64-prebuilt.tar.gz -C install_dir include lib
 
       - name: Add to Continuous Release
