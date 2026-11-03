@@ -81,7 +81,6 @@ jobs:
           # 2. Salin SEMUA header dari dalam folder modules secara dinamis
           mkdir -p release_assets/include/modules
           for mod in modules/*; do
-            # Cek apakah modul tersebut memiliki folder 'include'
             if [ -d "$mod/include" ]; then
               mod_name=$(basename "$mod")
               mkdir -p "release_assets/include/modules/$mod_name"
@@ -89,17 +88,18 @@ jobs:
             fi
           done
 
-          # 3. Salin header FreeType & HarfBuzz
-          cp -r third_party/externals/freetype/include release_assets/include/freetype2
-          mkdir -p release_assets/include/harfbuzz
-          find third_party/externals/harfbuzz/src -maxdepth 1 -name "*.h" -exec cp {} release_assets/include/harfbuzz/ \;
+          # 3. Salin SEMUA file header dari third_party/externals (mengabaikan file .c/.cpp)
+          mkdir -p release_assets/include/externals
+          cd third_party/externals
+          find . -type f \( -name "*.h" -o -name "*.hpp" \) -exec cp --parents {} ../../release_assets/include/externals/ \;
+          cd ../..
 
           # 4. Salin file library (.a / .so)
           find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
 
           # 5. Kompres menjadi ZIP
           cd release_assets
-          zip -r ../skia-android-arm64-m158.zip include lib
+          zip -r ../skia-android-arm64-prebuilt.zip include lib
           cd ..
 
       - name: Update Continuous Release
