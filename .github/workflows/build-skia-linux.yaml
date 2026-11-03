@@ -74,13 +74,29 @@ jobs:
         run: |
           mkdir -p release_assets/lib
 
-          # 1. Salin seluruh folder include ke dalam release_assets
+          # 1. Salin header utama Skia
           cp -r include release_assets/
 
-          # 2. Salin file library (.a dan .so) ke dalam folder lib
+          # 2. Salin SEMUA header dari dalam folder modules secara dinamis
+          mkdir -p release_assets/include/modules
+          for mod in modules/*; do
+            # Cek apakah modul tersebut memiliki folder 'include'
+            if [ -d "$mod/include" ]; then
+              mod_name=$(basename "$mod")
+              mkdir -p "release_assets/include/modules/$mod_name"
+              cp -r "$mod/include/"* "release_assets/include/modules/$mod_name/"
+            fi
+          done
+
+          # 3. Salin header FreeType & HarfBuzz
+          cp -r third_party/externals/freetype/include release_assets/include/freetype2
+          mkdir -p release_assets/include/harfbuzz
+          find third_party/externals/harfbuzz/src -maxdepth 1 -name "*.h" -exec cp {} release_assets/include/harfbuzz/ \;
+
+          # 4. Salin file library (.a / .so)
           find out/Linux_x64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
 
-          # 3. Kompres folder include dan lib ke dalam tar.gz
+          # 5. Kompres menjadi TAR.GZ
           tar -czvf skia-linux-x64-m158.tar.gz -C release_assets include lib
 
       - name: Update Continuous Release
