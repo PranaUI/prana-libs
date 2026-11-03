@@ -5,7 +5,7 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Memungkinkan trigger manual dari tab Actions
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'google/skia'
+          ref: 'chrome/m158'
           fetch-depth: 1
           path: 'skia'
 
@@ -28,25 +29,21 @@ jobs:
       - name: Install Prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libfontconfig-dev git
+          sudo apt-get install -y build-essential libfontconfig-dev git python3-venv ninja-build
 
       - name: Sync Skia Dependencies
         working-directory: skia
         run: |
-          # Script ini akan mendownload semua dependensi pihak ketiga yang dibutuhkan Skia
           python tools/git-sync-deps
 
-      - name: Fetch GN and Ninja
+      - name: Fetch GN
         working-directory: skia
         run: |
-          # Download GN dan Ninja pre-built yang disediakan Skia
           bin/fetch-gn
-          bin/fetch-ninja
 
       - name: Generate Build Files (GN)
         working-directory: skia
         run: |
-          # $ANDROID_NDK_LATEST_HOME adalah environment variable bawaan GitHub Actions ubuntu-latest
           bin/gn gen out/Android_arm64 --args='
             ndk="'$ANDROID_NDK_LATEST_HOME'"
             target_os="android"
@@ -64,14 +61,14 @@ jobs:
       - name: Compile Skia (Ninja)
         working-directory: skia
         run: |
-          bin/ninja -C out/Android_arm64
+          # Menggunakan Ninja bawaan sistem (apt), bukan bawaan skia/bin
+          ninja -C out/Android_arm64
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: skia-android-arm64
+          name: skia-android-arm64-m158
           path: |
             skia/out/Android_arm64/*.a
             skia/out/Android_arm64/*.so
           retention-days: 7
-          
