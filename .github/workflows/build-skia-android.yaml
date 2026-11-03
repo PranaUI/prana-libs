@@ -7,6 +7,10 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+# PENTING: Izin ini wajib ada agar GitHub Actions bisa membuat/mengubah Rilis
+permissions:
+  contents: write
+
 jobs:
   build-android:
     name: Build Android (arm64)
@@ -29,7 +33,7 @@ jobs:
       - name: Install Prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libfontconfig-dev git python3-venv ninja-build
+          sudo apt-get install -y build-essential libfontconfig-dev git python3-venv ninja-build zip
 
       - name: Sync Skia Dependencies
         working-directory: skia
@@ -65,11 +69,23 @@ jobs:
         run: |
           ninja -C out/Android_arm64
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Package Artifacts (ZIP)
+        working-directory: skia
+        run: |
+          # Membuat folder sementara untuk mengumpulkan file
+          mkdir -p release_assets
+          # Menyalin file .a dan .so ke folder release_assets
+          find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/ \;
+          # Mengompres folder menjadi file ZIP
+          zip -r skia-android-arm64-m158.zip release_assets/
+
+      - name: Create or Update Release
+        uses: ncipollo/release-action@v1
         with:
-          name: skia-android-arm64-m158
-          path: |
-            skia/out/Android_arm64/*.a
-            skia/out/Android_arm64/*.so
-          retention-days: 7
+          tag: "latest" # Nama tag yang akan selalu ditimpa (update terus)
+          name: "Latest Binary Build"
+          body: "Automated build of Skia, SDL3, Yoga, QuickJS-NG. Asset ini akan otomatis diperbarui setiap ada commit baru."
+          artifacts: "skia/skia-android-arm64-m158.zip"
+          allowUpdates: true # Mengizinkan update rilis yang sudah ada
+          replacesArtifacts: true # Menimpa file ZIP yang lama dengan yang baru
+          makeLatest: true # Menandai rilis ini sebagai rilis terbaru
