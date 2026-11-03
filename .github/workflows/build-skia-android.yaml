@@ -50,6 +50,12 @@ jobs:
             target_cpu="arm64"
             is_debug=false
             is_official_build=true
+            skia_enable_ganesh=true
+            skia_use_gl=true
+            skia_use_vulkan=true
+            skia_use_freetype=true
+            skia_use_harfbuzz=true
+            skia_use_icu=true
             skia_use_system_expat=false
             skia_use_system_freetype2=false
             skia_use_system_libjpeg_turbo=false
@@ -68,13 +74,13 @@ jobs:
         working-directory: skia
         run: |
           mkdir -p release_assets/lib
-          
+
           # 1. Salin seluruh folder include ke dalam release_assets
           cp -r include release_assets/
-          
+
           # 2. Salin file library (.a dan .so) ke dalam folder lib
           find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
-          
+
           # 3. Kompres dari dalam folder release_assets agar struktur root-nya langsung include dan lib
           cd release_assets
           zip -r ../skia-android-arm64-m158.zip include lib
