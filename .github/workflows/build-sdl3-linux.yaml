@@ -1,0 +1,60 @@
+name: Build SDL3 Linux
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build SDL3 Linux (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SDL Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'libsdl-org/SDL'
+          ref: 'main'
+          fetch-depth: 1
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build \
+            libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
+            libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev
+
+      - name: Configure CMake (Linux)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=install_dir
+
+      - name: Build SDL3
+        run: cmake --build build --config Release
+
+      - name: Install to Directory
+        run: cmake --install build
+
+      - name: Package Artifacts (TAR.GZ)
+        run: |
+          # Mengompres HANYA folder include dan lib dari dalam install_dir
+          tar -czvf sdl3-linux-x64-prebuilt.tar.gz -C install_dir include lib
+
+      - name: Add to Continuous Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "latest"
+          name: "Latest Prebuilt Libraries"
+          body: "Automated continuous build of prebuilt libraries (Skia & SDL3)."
+          artifacts: "sdl3-linux-x64-prebuilt.tar.gz"
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true
