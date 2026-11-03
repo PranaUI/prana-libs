@@ -35,7 +35,8 @@ jobs:
             -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=install_dir_android \
-            -DBUILD_SHARED_LIBS=OFF
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TESTING=OFF
 
       - name: Build Yoga
         run: cmake --build build_android --config Release
