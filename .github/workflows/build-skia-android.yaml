@@ -1,0 +1,77 @@
+name: Build Skia for Android
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Memungkinkan trigger manual dari tab Actions
+
+jobs:
+  build-android:
+    name: Build Android (arm64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Skia Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'google/skia'
+          fetch-depth: 1
+          path: 'skia'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libfontconfig-dev git
+
+      - name: Sync Skia Dependencies
+        working-directory: skia
+        run: |
+          # Script ini akan mendownload semua dependensi pihak ketiga yang dibutuhkan Skia
+          python tools/git-sync-deps
+
+      - name: Fetch GN and Ninja
+        working-directory: skia
+        run: |
+          # Download GN dan Ninja pre-built yang disediakan Skia
+          bin/fetch-gn
+          bin/fetch-ninja
+
+      - name: Generate Build Files (GN)
+        working-directory: skia
+        run: |
+          # $ANDROID_NDK_LATEST_HOME adalah environment variable bawaan GitHub Actions ubuntu-latest
+          bin/gn gen out/Android_arm64 --args='
+            ndk="'$ANDROID_NDK_LATEST_HOME'"
+            target_os="android"
+            target_cpu="arm64"
+            is_debug=false
+            is_official_build=true
+            skia_use_system_expat=false
+            skia_use_system_freetype2=false
+            skia_use_system_libjpeg_turbo=false
+            skia_use_system_libpng=false
+            skia_use_system_libwebp=false
+            skia_use_system_zlib=false
+          '
+
+      - name: Compile Skia (Ninja)
+        working-directory: skia
+        run: |
+          bin/ninja -C out/Android_arm64
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: skia-android-arm64
+          path: |
+            skia/out/Android_arm64/*.a
+            skia/out/Android_arm64/*.so
+          retention-days: 7
+          
