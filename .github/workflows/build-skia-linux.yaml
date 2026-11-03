@@ -1,0 +1,84 @@
+name: Build Skia Linux
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Skia Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'google/skia'
+          ref: 'chrome/m158'
+          fetch-depth: 1
+          path: 'skia'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+          # zip dihapus, tar sudah bawaan dari Ubuntu
+          sudo apt-get install -y build-essential libfontconfig-dev libgl1-mesa-dev git python3-venv ninja-build
+
+      - name: Sync Skia Dependencies
+        working-directory: skia
+        run: python tools/git-sync-deps
+
+      - name: Fetch GN
+        working-directory: skia
+        run: bin/fetch-gn
+
+      - name: Generate Build Files (GN)
+        working-directory: skia
+        run: |
+          bin/gn gen out/Linux_x64 --args='
+            target_os="linux"
+            target_cpu="x64"
+            is_debug=false
+            is_official_build=true
+            skia_use_system_expat=false
+            skia_use_system_freetype2=false
+            skia_use_system_libjpeg_turbo=false
+            skia_use_system_libpng=false
+            skia_use_system_libwebp=false
+            skia_use_system_zlib=false
+            skia_use_system_harfbuzz=false
+            skia_use_system_icu=false
+          '
+
+      - name: Compile Skia (Ninja)
+        working-directory: skia
+        run: ninja -C out/Linux_x64
+
+      - name: Package Artifacts (TAR.GZ)
+        working-directory: skia
+        run: |
+          mkdir -p release_assets
+          find out/Linux_x64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/ \;
+          # Membuat file tar.gz dari isi folder release_assets
+          tar -czvf skia-linux-x64-m158.tar.gz -C release_assets .
+
+      - name: Update Continuous Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "latest"
+          name: "Latest Skia Build (chrome/m158)"
+          body: "Automated continuous build of Skia for Android (arm64) and Linux (x64)."
+          artifacts: "skia/skia-linux-x64-m158.tar.gz"
+          allowUpdates: true
+          replacesArtifacts: true
+          omitBodyDuringUpdate: true
