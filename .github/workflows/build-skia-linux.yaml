@@ -55,6 +55,10 @@ jobs:
             skia_use_freetype=true
             skia_use_harfbuzz=true
             skia_use_icu=true
+            skia_libjpeg=true
+            skia_use_libpng=true
+            skia_use_libwebp=true
+            skia_use_zlib=true
             skia_use_system_expat=false
             skia_use_system_freetype2=false
             skia_use_system_libjpeg_turbo=false
@@ -73,18 +77,32 @@ jobs:
         working-directory: skia
         run: |
           mkdir -p release_assets/lib
-          
-          # 1. Salin header utama Skia
+
+          echo "Copying Skia headers..."
+
+          # Main public headers
           cp -r include release_assets/
-          cp -r modules release_assets/
-          cp -r external release_assets/
-          
+
+          # Skia modules
+          if [ -d modules ]; then
+            cp -r modules release_assets/
+          fi
+
+          # External dependencies
+          if [ -d external ]; then
+            cp -r external release_assets/
+          fi
+
+          # Third-party dependencies
+          if [ -d third_party ]; then
+            cp -r third_party release_assets/
+          fi
 
           # 4. Salin file library (.a / .so)
           find out/Linux_x64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
 
           # 5. Kompres menjadi TAR.GZ
-          tar -czvf skia-linux-x64-prebuilt.tar.gz -C release_assets include lib
+          tar -czvf skia-linux-x64-prebuilt.tar.gz -C release_assets include lib modules external third_party
 
       - name: Update Continuous Release
         uses: ncipollo/release-action@v1
