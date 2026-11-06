@@ -94,7 +94,7 @@ jobs:
           tag: "latest"
           name: "Latest Prebuilt Libraries"
           body: "Automated continuous build of prebuilt libraries (Skia & SDL3)."
-          artifacts: "skia/skia-android-arm64-m158.zip"
+          artifacts: "skia/skia-android-arm64-prebuilt.zip"
           allowUpdates: true
           replacesArtifacts: true
           omitBodyDuringUpdate: true
