@@ -1,10 +1,13 @@
+```yaml
 name: Build Skia Android
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
+
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
+
   workflow_dispatch:
 
 permissions:
@@ -12,50 +15,112 @@ permissions:
 
 jobs:
   build-android:
-    name: Build Android (arm64)
+    name: Build Skia (Android ARM64)
     runs-on: ubuntu-latest
+
     steps:
+      # ==========================================
+      # 1. Checkout Skia
+      # ==========================================
       - name: Checkout Skia Repository
         uses: actions/checkout@v4
         with:
-          repository: 'google/skia'
-          ref: 'main'
+          repository: google/skia
+          ref: main
           fetch-depth: 1
-          path: 'skia'
+          path: skia
 
+      # ==========================================
+      # 2. Setup Python
+      # ==========================================
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
+      # ==========================================
+      # 3. Install Prerequisites
+      # ==========================================
       - name: Install Prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libfontconfig-dev git python3-venv ninja-build zip
 
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            lld \
+            libfontconfig-dev \
+            git \
+            python3-venv \
+            ninja-build \
+            zip \
+            unzip
+
+      # ==========================================
+      # 4. Validate Android NDK
+      # ==========================================
+      - name: Check Android NDK
+        run: |
+          echo "Android NDK: $ANDROID_NDK_LATEST_HOME"
+
+          if [ -z "$ANDROID_NDK_LATEST_HOME" ]; then
+            echo "Android NDK not found!"
+            exit 1
+          fi
+
+          if [ ! -d "$ANDROID_NDK_LATEST_HOME" ]; then
+            echo "Invalid Android NDK path!"
+            exit 1
+          fi
+
+      # ==========================================
+      # 5. Sync Skia Dependencies
+      # ==========================================
       - name: Sync Skia Dependencies
         working-directory: skia
-        run: python tools/git-sync-deps
+        run: |
+          python tools/git-sync-deps
 
+      # ==========================================
+      # 6. Fetch GN
+      # ==========================================
       - name: Fetch GN
         working-directory: skia
-        run: bin/fetch-gn
+        run: |
+          bin/fetch-gn
 
-      - name: Generate Build Files (GN)
+          chmod +x bin/gn
+
+          bin/gn --version
+
+      # ==========================================
+      # 7. Generate Build Files
+      # ==========================================
+      - name: Generate Build Files
         working-directory: skia
         run: |
           bin/gn gen out/Android_arm64 --args='
             ndk="'$ANDROID_NDK_LATEST_HOME'"
             target_os="android"
             target_cpu="arm64"
+
             is_debug=false
             is_official_build=true
+
             skia_enable_ganesh=true
+
             skia_use_gl=true
             skia_use_vulkan=true
+
             skia_use_freetype=true
             skia_use_harfbuzz=true
             skia_use_icu=true
+
+            skia_libjpeg=true
+            skia_use_libpng=true
+            skia_use_libwebp=true
+            skia_use_zlib=true
+
             skia_use_system_expat=false
             skia_use_system_freetype2=false
             skia_use_system_libjpeg_turbo=false
@@ -66,35 +131,113 @@ jobs:
             skia_use_system_icu=false
           '
 
-      - name: Compile Skia (Ninja)
-        working-directory: skia
-        run: ninja -C out/Android_arm64
-
-      - name: Package Artifacts (ZIP)
+      # ==========================================
+      # 8. Compile Skia
+      # ==========================================
+      - name: Compile Skia
         working-directory: skia
         run: |
-          mkdir -p release_assets/lib
-          
-          # 1. Salin header utama Skia
-          cp -r include release_assets/
-          cp -r modules release_assets/
-          cp -r external release_assets/
-          
-          # 4. Salin file library (.a / .so)
-          find out/Android_arm64 -maxdepth 1 -type f \( -name "*.a" -o -name "*.so" \) -exec cp {} release_assets/lib/ \;
+          ninja -C out/Android_arm64
 
-          # 5. Kompres menjadi ZIP
+      # ==========================================
+      # 9. Package Artifacts
+      # ==========================================
+      - name: Package Artifacts
+        working-directory: skia
+        run: |
+          set -e
+
+          mkdir -p release_assets/lib
+
+          echo "Copying Skia headers..."
+
+          # Main public headers
+          cp -r include release_assets/
+
+          # Skia modules
+          if [ -d modules ]; then
+            cp -r modules release_assets/
+          fi
+
+          # External dependencies
+          if [ -d external ]; then
+            cp -r external release_assets/
+          fi
+
+          # Third-party dependencies
+          if [ -d third_party ]; then
+            cp -r third_party release_assets/
+          fi
+
+          echo "Copying compiled libraries..."
+
+          find out/Android_arm64 \
+            -maxdepth 1 \
+            -type f \
+            \( -name "*.a" -o -name "*.so" \) \
+            -exec cp {} release_assets/lib/ \;
+
+          # Validate libraries
+          if [ -z "$(find release_assets/lib -type f)" ]; then
+            echo "No compiled libraries found!"
+            exit 1
+          fi
+
+          # Validate headers
+          if [ ! -d release_assets/include ]; then
+            echo "Skia include directory missing!"
+            exit 1
+          fi
+
+          echo "Package contents:"
+          find release_assets -maxdepth 2 -type d
+          echo "Libraries:"
+          ls -lh release_assets/lib
+
+          # Create archive containing EVERYTHING
           cd release_assets
-          zip -r ../skia-android-arm64-prebuilt.zip include lib
+
+          zip -r ../skia-android-arm64-prebuilt.zip .
+
           cd ..
 
+          echo "Archive created:"
+          ls -lh skia-android-arm64-prebuilt.zip
+
+          # Verify archive
+          unzip -t skia-android-arm64-prebuilt.zip
+
+      # ==========================================
+      # 10. Upload Build Artifact
+      # ==========================================
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skia-android-arm64-prebuilt
+          path: skia/skia-android-arm64-prebuilt.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      # ==========================================
+      # 11. Update Continuous Release
+      # ==========================================
       - name: Update Continuous Release
+        if: github.event_name != 'pull_request'
         uses: ncipollo/release-action@v1
         with:
-          tag: "latest"
-          name: "Latest Prebuilt Libraries"
-          body: "Automated continuous build of prebuilt libraries (Skia & SDL3)."
-          artifacts: "skia/skia-android-arm64-prebuilt.zip"
+          tag: latest
+          name: Latest Prebuilt Libraries
+          body: |
+            Automated continuous build of Skia for Android ARM64.
+
+            Included:
+            - Skia public headers
+            - Skia modules
+            - External dependencies (when available)
+            - Third-party dependencies
+            - Compiled static/shared libraries
+          artifacts: skia/skia-android-arm64-prebuilt.zip
           allowUpdates: true
           replacesArtifacts: true
           omitBodyDuringUpdate: true
+```
