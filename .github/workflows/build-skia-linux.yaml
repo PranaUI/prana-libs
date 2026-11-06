@@ -95,7 +95,7 @@ jobs:
           tag: "latest"
           name: "Latest Prebuilt Libraries"
           body: "Automated continuous build of prebuilt libraries (Skia & SDL3)."
-          artifacts: "skia/skia-linux-x64-m158.tar.gz"
+          artifacts: "skia/skia-linux-x64-prebuilt.tar.gz"
           allowUpdates: true
           replacesArtifacts: true
           omitBodyDuringUpdate: true
