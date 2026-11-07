@@ -1,46 +1,210 @@
-```yaml
-name: Build Skia Android
+name: Build Skia 
 
 on:
   push:
     branches: ["main", "master"]
-
   pull_request:
     branches: ["main", "master"]
-
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-android:
-    name: Build Skia (Android ARM64)
+
+  # ==========================================
+  # BUILD LINUX X64
+  # ==========================================
+  build-linux:
+    name: Build Skia Chrome 158 (Linux x64)
     runs-on: ubuntu-latest
 
     steps:
-      # ==========================================
-      # 1. Checkout Skia
-      # ==========================================
+      # 1. Checkout Skia Chrome 158
       - name: Checkout Skia Repository
         uses: actions/checkout@v4
         with:
           repository: google/skia
-          ref: main
+          ref: chrome/m150
           fetch-depth: 1
           path: skia
 
-      # ==========================================
       # 2. Setup Python
-      # ==========================================
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # ==========================================
-      # 3. Install Prerequisites
-      # ==========================================
+      # 3. Install prerequisites
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            libfontconfig-dev \
+            libgl1-mesa-dev \
+            libvulkan-dev \
+            git \
+            python3-venv \
+            ninja-build \
+            zip \
+            unzip
+
+      # 4. Verify Skia version
+      - name: Verify Skia Version
+        working-directory: skia
+        run: |
+          echo "Skia branch:"
+          git branch --show-current
+
+          echo "Skia commit:"
+          git rev-parse HEAD
+
+          echo "Skia milestone:"
+          grep SK_MILESTONE include/core/SkMilestone.h
+
+      # 5. Sync dependencies
+      - name: Sync Skia Dependencies
+        working-directory: skia
+        run: |
+          set -e
+
+          git config --global http.version HTTP/1.1
+
+          for attempt in 1 2 3 4; do
+            echo "Dependency sync attempt $attempt"
+
+            if python tools/git-sync-deps; then
+              echo "Dependencies synced successfully"
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 4 ]; then
+              echo "Dependency synchronization failed"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+      # 6. Fetch GN
+      - name: Fetch GN
+        working-directory: skia
+        run: |
+          bin/fetch-gn
+          chmod +x bin/gn
+          bin/gn --version
+
+      # 7. Generate build files
+      - name: Generate Build Files
+        working-directory: skia
+        run: |
+          bin/gn gen out/Linux_x64 --args='
+            target_os="linux"
+            target_cpu="x64"
+
+            is_debug=false
+            is_official_build=true
+
+            skia_enable_ganesh=true
+
+            skia_use_gl=true
+            skia_use_vulkan=true
+
+            skia_use_freetype=true
+            skia_use_harfbuzz=true
+            skia_use_icu=true
+
+            skia_use_system_expat=false
+            skia_use_system_freetype2=false
+            skia_use_system_libjpeg_turbo=false
+            skia_use_system_libpng=false
+            skia_use_system_libwebp=false
+            skia_use_system_zlib=false
+            skia_use_system_harfbuzz=false
+            skia_use_system_icu=false
+          '
+
+      # 8. Compile Skia
+      - name: Compile Skia
+        working-directory: skia
+        run: |
+          ninja -C out/Linux_x64
+
+      # 9. Package libraries
+      - name: Package Linux Artifacts
+        working-directory: skia
+        run: |
+          set -e
+
+          mkdir -p release_assets/lib
+
+          echo "Copying Skia headers..."
+          cp -r include release_assets/
+
+          for dir in modules external third_party; do
+            if [ -d "$dir" ]; then
+              echo "Copying $dir..."
+              cp -r "$dir" release_assets/
+            fi
+          done
+
+          echo "Copying compiled libraries..."
+
+          find out/Linux_x64 -type f \
+            \( -name "*.a" -o -name "*.so" \) \
+            -exec cp {} release_assets/lib/ \;
+
+          if [ -z "$(find release_assets/lib -type f -print -quit)" ]; then
+            echo "No compiled libraries found!"
+            exit 1
+          fi
+
+          echo "Libraries:"
+          ls -lh release_assets/lib
+
+          tar -czvf skia-linux-x64-prebuilt.tar.gz \
+            -C release_assets .
+
+          echo "Verifying archive..."
+          tar -tzf skia-linux-x64-prebuilt.tar.gz
+
+      # 10. Upload artifact
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skia-chrome158-linux-x64
+          path: skia/skia-linux-x64-prebuilt.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+
+  # ==========================================
+  # BUILD ANDROID ARM64
+  # ==========================================
+  build-android:
+    name: Build Skia Chrome 158 (Android ARM64)
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout Skia Chrome 158
+      - name: Checkout Skia Repository
+        uses: actions/checkout@v4
+        with:
+          repository: google/skia
+          ref: chrome/m150
+          fetch-depth: 1
+          path: skia
+
+      # 2. Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # 3. Install prerequisites
       - name: Install Prerequisites
         run: |
           sudo apt-get update
@@ -56,51 +220,69 @@ jobs:
             zip \
             unzip
 
-      # ==========================================
-      # 4. Validate Android NDK
-      # ==========================================
+      # 4. Verify Android NDK
       - name: Check Android NDK
         run: |
           echo "Android NDK: $ANDROID_NDK_LATEST_HOME"
 
-          if [ -z "$ANDROID_NDK_LATEST_HOME" ]; then
+          if [ -z "$ANDROID_NDK_LATEST_HOME" ] || \
+             [ ! -d "$ANDROID_NDK_LATEST_HOME" ]; then
             echo "Android NDK not found!"
             exit 1
           fi
 
-          if [ ! -d "$ANDROID_NDK_LATEST_HOME" ]; then
-            echo "Invalid Android NDK path!"
-            exit 1
-          fi
+      # 5. Verify Skia version
+      - name: Verify Skia Version
+        working-directory: skia
+        run: |
+          echo "Skia branch:"
+          git branch --show-current
 
-      # ==========================================
-      # 5. Sync Skia Dependencies
-      # ==========================================
+          echo "Skia commit:"
+          git rev-parse HEAD
+
+          echo "Skia milestone:"
+          grep SK_MILESTONE include/core/SkMilestone.h
+
+      # 6. Sync dependencies
       - name: Sync Skia Dependencies
         working-directory: skia
         run: |
-          python tools/git-sync-deps
+          set -e
 
-      # ==========================================
-      # 6. Fetch GN
-      # ==========================================
+          git config --global http.version HTTP/1.1
+
+          for attempt in 1 2 3 4; do
+            echo "Dependency sync attempt $attempt"
+
+            if python tools/git-sync-deps; then
+              echo "Dependencies synced successfully"
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 4 ]; then
+              echo "Dependency synchronization failed"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+      # 7. Fetch GN
       - name: Fetch GN
         working-directory: skia
         run: |
           bin/fetch-gn
-
           chmod +x bin/gn
-
           bin/gn --version
 
-      # ==========================================
-      # 7. Generate Build Files
-      # ==========================================
+      # 8. Generate build files
       - name: Generate Build Files
         working-directory: skia
         run: |
           bin/gn gen out/Android_arm64 --args='
             ndk="'$ANDROID_NDK_LATEST_HOME'"
+
             target_os="android"
             target_cpu="arm64"
 
@@ -116,11 +298,6 @@ jobs:
             skia_use_harfbuzz=true
             skia_use_icu=true
 
-            skia_libjpeg=true
-            skia_use_libpng=true
-            skia_use_libwebp=true
-            skia_use_zlib=true
-
             skia_use_system_expat=false
             skia_use_system_freetype2=false
             skia_use_system_libjpeg_turbo=false
@@ -131,18 +308,14 @@ jobs:
             skia_use_system_icu=false
           '
 
-      # ==========================================
-      # 8. Compile Skia
-      # ==========================================
+      # 9. Compile Skia
       - name: Compile Skia
         working-directory: skia
         run: |
           ninja -C out/Android_arm64
 
-      # ==========================================
-      # 9. Package Artifacts
-      # ==========================================
-      - name: Package Artifacts
+      # 10. Package libraries
+      - name: Package Android Artifacts
         working-directory: skia
         run: |
           set -e
@@ -150,94 +323,100 @@ jobs:
           mkdir -p release_assets/lib
 
           echo "Copying Skia headers..."
-
-          # Main public headers
           cp -r include release_assets/
 
-          # Skia modules
-          if [ -d modules ]; then
-            cp -r modules release_assets/
-          fi
-
-          # External dependencies
-          if [ -d external ]; then
-            cp -r external release_assets/
-          fi
-
-          # Third-party dependencies
-          if [ -d third_party ]; then
-            cp -r third_party release_assets/
-          fi
+          for dir in modules external third_party; do
+            if [ -d "$dir" ]; then
+              echo "Copying $dir..."
+              cp -r "$dir" release_assets/
+            fi
+          done
 
           echo "Copying compiled libraries..."
 
-          find out/Android_arm64 \
-            -maxdepth 1 \
-            -type f \
+          find out/Android_arm64 -type f \
             \( -name "*.a" -o -name "*.so" \) \
             -exec cp {} release_assets/lib/ \;
 
-          # Validate libraries
-          if [ -z "$(find release_assets/lib -type f)" ]; then
+          if [ -z "$(find release_assets/lib -type f -print -quit)" ]; then
             echo "No compiled libraries found!"
             exit 1
           fi
 
-          # Validate headers
-          if [ ! -d release_assets/include ]; then
-            echo "Skia include directory missing!"
-            exit 1
-          fi
-
-          echo "Package contents:"
-          find release_assets -maxdepth 2 -type d
           echo "Libraries:"
           ls -lh release_assets/lib
 
-          # Create archive containing EVERYTHING
           cd release_assets
 
           zip -r ../skia-android-arm64-prebuilt.zip .
 
           cd ..
 
-          echo "Archive created:"
-          ls -lh skia-android-arm64-prebuilt.zip
-
-          # Verify archive
+          echo "Verifying archive..."
           unzip -t skia-android-arm64-prebuilt.zip
 
-      # ==========================================
-      # 10. Upload Build Artifact
-      # ==========================================
-      - name: Upload Build Artifact
+      # 11. Upload artifact
+      - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skia-android-arm64-prebuilt
+          name: skia-chrome158-android-arm64
           path: skia/skia-android-arm64-prebuilt.zip
           if-no-files-found: error
           retention-days: 7
 
-      # ==========================================
-      # 11. Update Continuous Release
-      # ==========================================
+
+  # ==========================================
+  # PUBLISH RELEASE
+  # ==========================================
+  publish-release:
+    name: Publish Skia Chrome 158 Release
+    runs-on: ubuntu-latest
+
+    needs:
+      - build-linux
+      - build-android
+
+    if: github.event_name != 'pull_request'
+
+    steps:
+      # 1. Download Linux artifact
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: skia-linux-x64
+          path: release_assets
+
+      # 2. Download Android artifact
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: skia-android-arm64
+          path: release_assets
+
+      # 3. Publish release
       - name: Update Continuous Release
-        if: github.event_name != 'pull_request'
         uses: ncipollo/release-action@v1
         with:
-          tag: latest
-          name: Latest Prebuilt Libraries
+          tag: chrome-158
+          name: Skia Chrome 158 Prebuilt Libraries
           body: |
-            Automated continuous build of Skia for Android ARM64.
+            Automated continuous build of Skia Chrome 158.
 
-            Included:
-            - Skia public headers
-            - Skia modules
-            - External dependencies (when available)
-            - Third-party dependencies
-            - Compiled static/shared libraries
-          artifacts: skia/skia-android-arm64-prebuilt.zip
+            Source:
+            https://github.com/google/skia/tree/chrome/m150
+
+            Included targets:
+            - Linux x64
+            - Android ARM64
+
+            Artifacts:
+            - skia-linux-x64-prebuilt.tar.gz
+            - skia-android-arm64-prebuilt.zip
+
+          artifacts: |
+            release_assets/skia-chrome158-linux-x64-prebuilt.tar.gz
+            release_assets/skia-chrome158-android-arm64-prebuilt.zip
+
           allowUpdates: true
           replacesArtifacts: true
           omitBodyDuringUpdate: true
-```
