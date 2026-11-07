@@ -206,19 +206,19 @@ jobs:
           ls -lh release_assets/lib
 
           # Create TAR.GZ
-          tar -czvf skia-chrome158-linux-x64-prebuilt.tar.gz \
+          tar -czvf skia-linux-x64-prebuilt.tar.gz \
             -C release_assets .
 
           # Verify archive
           echo "Verifying Linux archive..."
-          tar -tzf skia-chrome158-linux-x64-prebuilt.tar.gz
+          tar -tzf skia-linux-x64-prebuilt.tar.gz
 
       # 10. Upload Linux artifact
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skia-chrome158-linux-x64
-          path: skia/skia-chrome158-linux-x64-prebuilt.tar.gz
+          name: skia-linux-x64
+          path: skia/skia-linux-x64-prebuilt.tar.gz
           if-no-files-found: error
           retention-days: 7
 
@@ -430,20 +430,20 @@ jobs:
           # Create ZIP
           cd release_assets
 
-          zip -r ../skia-chrome158-android-arm64-prebuilt.zip .
+          zip -r ../skia-android-arm64-prebuilt.zip .
 
           cd ..
 
           # Verify archive
           echo "Verifying Android archive..."
-          unzip -t skia-chrome158-android-arm64-prebuilt.zip
+          unzip -t skia-android-arm64-prebuilt.zip
 
       # 11. Upload Android artifact
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skia-chrome158-android-arm64
-          path: skia/skia-chrome158-android-arm64-prebuilt.zip
+          name: skia-android-arm64
+          path: skia/skia-android-arm64-prebuilt.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -467,14 +467,14 @@ jobs:
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-chrome158-linux-x64
+          name: skia-linux-x64
           path: release_assets
 
       # 2. Download Android artifact
       - name: Download Android Artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-chrome158-android-arm64
+          name: skia-android-arm64
           path: release_assets
 
       # 3. Publish release
@@ -500,8 +500,8 @@ jobs:
             - Compiled static/shared libraries
 
           artifacts: |
-            release_assets/skia-chrome158-linux-x64-prebuilt.tar.gz
-            release_assets/skia-chrome158-android-arm64-prebuilt.zip
+            release_assets/skia-linux-x64-prebuilt.tar.gz
+            release_assets/skia-android-arm64-prebuilt.zip
 
           allowUpdates: true
           replacesArtifacts: true
