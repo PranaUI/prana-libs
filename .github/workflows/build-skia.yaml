@@ -1,4 +1,5 @@
-name: Build Skia 
+
+name: Build Skia
 
 on:
   push:
@@ -20,12 +21,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # 1. Checkout Skia Chrome 158
       - name: Checkout Skia Repository
         uses: actions/checkout@v4
         with:
           repository: google/skia
-          ref: chrome/m150
+          ref: chrome/150
           fetch-depth: 1
           path: skia
 
@@ -133,7 +135,7 @@ jobs:
         run: |
           ninja -C out/Linux_x64
 
-      # 9. Package libraries
+      # 9. Package Linux libraries and headers
       - name: Package Linux Artifacts
         working-directory: skia
         run: |
@@ -141,42 +143,82 @@ jobs:
 
           mkdir -p release_assets/lib
 
-          echo "Copying Skia headers..."
+          echo "======================================"
+          echo "Copying main Skia headers"
+          echo "======================================"
+
           cp -r include release_assets/
 
-          for dir in modules external third_party; do
-            if [ -d "$dir" ]; then
-              echo "Copying $dir..."
-              cp -r "$dir" release_assets/
-            fi
-          done
+          echo "======================================"
+          echo "Copying modules headers recursively"
+          echo "======================================"
 
-          echo "Copying compiled libraries..."
+          if [ -d modules ]; then
+            find modules -type f \
+              \( -name "*.h" \
+              -o -name "*.hpp" \
+              -o -name "*.hh" \
+              -o -name "*.hxx" \) \
+              -exec cp --parents {} release_assets/ \;
+          fi
+
+          echo "======================================"
+          echo "Copying third_party headers recursively"
+          echo "======================================"
+
+          if [ -d third_party ]; then
+            find third_party -type f \
+              \( -name "*.h" \
+              -o -name "*.hpp" \
+              -o -name "*.hh" \
+              -o -name "*.hxx" \) \
+              -exec cp --parents {} release_assets/ \;
+          fi
+
+          echo "======================================"
+          echo "Copying compiled libraries"
+          echo "======================================"
 
           find out/Linux_x64 -type f \
             \( -name "*.a" -o -name "*.so" \) \
             -exec cp {} release_assets/lib/ \;
 
+          # Validate libraries
           if [ -z "$(find release_assets/lib -type f -print -quit)" ]; then
             echo "No compiled libraries found!"
             exit 1
           fi
 
+          echo "======================================"
+          echo "Package summary"
+          echo "======================================"
+
+          echo "Main headers:"
+          find release_assets/include -type f | wc -l
+
+          echo "Modules headers:"
+          find release_assets/modules -type f 2>/dev/null | wc -l
+
+          echo "Third-party headers:"
+          find release_assets/third_party -type f 2>/dev/null | wc -l
+
           echo "Libraries:"
           ls -lh release_assets/lib
 
-          tar -czvf skia-linux-x64-prebuilt.tar.gz \
+          # Create TAR.GZ
+          tar -czvf skia-chrome158-linux-x64-prebuilt.tar.gz \
             -C release_assets .
 
-          echo "Verifying archive..."
-          tar -tzf skia-linux-x64-prebuilt.tar.gz
+          # Verify archive
+          echo "Verifying Linux archive..."
+          tar -tzf skia-chrome158-linux-x64-prebuilt.tar.gz
 
-      # 10. Upload artifact
+      # 10. Upload Linux artifact
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: skia-chrome158-linux-x64
-          path: skia/skia-linux-x64-prebuilt.tar.gz
+          path: skia/skia-chrome158-linux-x64-prebuilt.tar.gz
           if-no-files-found: error
           retention-days: 7
 
@@ -189,12 +231,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # 1. Checkout Skia Chrome 158
       - name: Checkout Skia Repository
         uses: actions/checkout@v4
         with:
           repository: google/skia
-          ref: chrome/m150
+          ref: chrome/150
           fetch-depth: 1
           path: skia
 
@@ -220,7 +263,7 @@ jobs:
             zip \
             unzip
 
-      # 4. Verify Android NDK
+      # 4. Validate Android NDK
       - name: Check Android NDK
         run: |
           echo "Android NDK: $ANDROID_NDK_LATEST_HOME"
@@ -314,7 +357,7 @@ jobs:
         run: |
           ninja -C out/Android_arm64
 
-      # 10. Package libraries
+      # 10. Package Android libraries and headers
       - name: Package Android Artifacts
         working-directory: skia
         run: |
@@ -322,51 +365,91 @@ jobs:
 
           mkdir -p release_assets/lib
 
-          echo "Copying Skia headers..."
+          echo "======================================"
+          echo "Copying main Skia headers"
+          echo "======================================"
+
           cp -r include release_assets/
 
-          for dir in modules external third_party; do
-            if [ -d "$dir" ]; then
-              echo "Copying $dir..."
-              cp -r "$dir" release_assets/
-            fi
-          done
+          echo "======================================"
+          echo "Copying modules headers recursively"
+          echo "======================================"
 
-          echo "Copying compiled libraries..."
+          if [ -d modules ]; then
+            find modules -type f \
+              \( -name "*.h" \
+              -o -name "*.hpp" \
+              -o -name "*.hh" \
+              -o -name "*.hxx" \) \
+              -exec cp --parents {} release_assets/ \;
+          fi
+
+          echo "======================================"
+          echo "Copying third_party headers recursively"
+          echo "======================================"
+
+          if [ -d third_party ]; then
+            find third_party -type f \
+              \( -name "*.h" \
+              -o -name "*.hpp" \
+              -o -name "*.hh" \
+              -o -name "*.hxx" \) \
+              -exec cp --parents {} release_assets/ \;
+          fi
+
+          echo "======================================"
+          echo "Copying compiled libraries"
+          echo "======================================"
 
           find out/Android_arm64 -type f \
             \( -name "*.a" -o -name "*.so" \) \
             -exec cp {} release_assets/lib/ \;
 
+          # Validate libraries
           if [ -z "$(find release_assets/lib -type f -print -quit)" ]; then
             echo "No compiled libraries found!"
             exit 1
           fi
 
+          echo "======================================"
+          echo "Package summary"
+          echo "======================================"
+
+          echo "Main headers:"
+          find release_assets/include -type f | wc -l
+
+          echo "Modules headers:"
+          find release_assets/modules -type f 2>/dev/null | wc -l
+
+          echo "Third-party headers:"
+          find release_assets/third_party -type f 2>/dev/null | wc -l
+
           echo "Libraries:"
           ls -lh release_assets/lib
 
+          # Create ZIP
           cd release_assets
 
-          zip -r ../skia-android-arm64-prebuilt.zip .
+          zip -r ../skia-chrome158-android-arm64-prebuilt.zip .
 
           cd ..
 
-          echo "Verifying archive..."
-          unzip -t skia-android-arm64-prebuilt.zip
+          # Verify archive
+          echo "Verifying Android archive..."
+          unzip -t skia-chrome158-android-arm64-prebuilt.zip
 
-      # 11. Upload artifact
+      # 11. Upload Android artifact
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
           name: skia-chrome158-android-arm64
-          path: skia/skia-android-arm64-prebuilt.zip
+          path: skia/skia-chrome158-android-arm64-prebuilt.zip
           if-no-files-found: error
           retention-days: 7
 
 
   # ==========================================
-  # PUBLISH RELEASE
+  # PUBLISH GITHUB RELEASE
   # ==========================================
   publish-release:
     name: Publish Skia Chrome 158 Release
@@ -379,18 +462,19 @@ jobs:
     if: github.event_name != 'pull_request'
 
     steps:
+
       # 1. Download Linux artifact
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-linux-x64
+          name: skia-chrome158-linux-x64
           path: release_assets
 
       # 2. Download Android artifact
       - name: Download Android Artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-android-arm64
+          name: skia-chrome158-android-arm64
           path: release_assets
 
       # 3. Publish release
@@ -403,15 +487,17 @@ jobs:
             Automated continuous build of Skia Chrome 158.
 
             Source:
-            https://github.com/google/skia/tree/chrome/m150
+            https://github.com/google/skia/tree/chrome/150
 
             Included targets:
             - Linux x64
             - Android ARM64
 
-            Artifacts:
-            - skia-linux-x64-prebuilt.tar.gz
-            - skia-android-arm64-prebuilt.zip
+            Package contents:
+            - Skia public headers
+            - Recursive modules headers
+            - Recursive third-party headers
+            - Compiled static/shared libraries
 
           artifacts: |
             release_assets/skia-chrome158-linux-x64-prebuilt.tar.gz
