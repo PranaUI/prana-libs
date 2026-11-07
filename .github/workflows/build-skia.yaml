@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: google/skia
-          ref: chrome/150
+          ref: chrome/m150
           fetch-depth: 1
           path: skia
 
@@ -237,7 +237,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: google/skia
-          ref: chrome/150
+          ref: chrome/m150
           fetch-depth: 1
           path: skia
 
